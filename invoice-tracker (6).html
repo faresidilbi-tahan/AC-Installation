@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abed Tahan — Invoice Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --blue: #1a5fb4;
+    --blue-dark: #154d92;
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #d7dde5;
+    --unpaid: #b45309;
+    --paid: #15803d;
+    --danger: #b42318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  header {
+    background: var(--blue);
+    color: #fff;
+    text-align: center;
+    padding: 22px 20px 20px;
+  }
+  header img { width: 150px; display: block; margin: 0 auto 0px; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .92; }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 20px;
+  }
+  .panel h2 { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  label:first-of-type { margin-top: 0; }
+  input, textarea {
+    width: 100%;
+    font: inherit;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--ink);
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  input:focus, textarea:focus, button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+  }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 4px;
+    border: 1px solid var(--blue);
+    background: var(--blue);
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--blue-dark); }
+  button.secondary { background: #fff; color: var(--blue); }
+  button.secondary:hover:not(:disabled) { background: #eef3fa; }
+  button.small { padding: 4px 10px; font-size: 13px; font-weight: 500; }
+  button:disabled { background: #b8c4d6; border-color: #b8c4d6; color: #fff; cursor: not-allowed; }
+  .actions { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .search { margin-bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .search input { flex: 1 1 240px; padding: 9px 12px; }
+  .search select {
+    font: inherit;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--ink);
+    min-width: 150px;
+  }
+  .search select:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .toolbar .count { color: var(--muted); font-size: 14px; margin-left: 10px; }
+  .toolbar label { margin: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; }
+  .toolbar input[type="checkbox"] { width: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  td.check { width: 36px; }
+  .status { font-weight: 600; }
+  .status.unpaid { color: var(--unpaid); }
+  .status.paid { color: var(--paid); }
+  .empty { color: var(--muted); padding: 30px 0; text-align: center; font-size: 14px; }
+  .error { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  .wrap { overflow-x: auto; }
+  .busy { opacity: .6; pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <img src="https://abedtahan.com/cdn/shop/files/AT_Logo_400x200_Transparent.png?v=1732612010&width=250" alt="Abed Tahan">
+  <h1>AC Installation Tracker</h1>
+  <p>Add installer invoices, then adjust them to paid.</p>
+</header>
+
+<main id="app">
+  <section class="panel">
+    <h2>Add invoice</h2>
+    <label for="mainInvoice">Main invoice number</label>
+    <input id="mainInvoice" placeholder="e.g. 45120">
+
+    <label for="installer">Installer name</label>
+    <input id="installer" placeholder="e.g. Ahmad Khalil">
+
+    <label for="subInvoices">Sub invoice numbers</label>
+    <textarea id="subInvoices" placeholder="45120-1&#10;45120-2&#10;45120-3"></textarea>
+    <div class="hint">One per line, or separated by commas.</div>
+
+    <div class="error" id="formError"></div>
+    <div class="actions">
+      <button id="addBtn">Add invoice</button>
+      <button id="clearFormBtn" class="secondary">Clear</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="search">
+      <input id="search" placeholder="Search by invoice number or installer" autocomplete="off">
+      <select id="installerFilter"><option value="">All installers</option></select>
+      <select id="statusFilter">
+        <option value="">All statuses</option>
+        <option value="Unpaid">Unpaid</option>
+        <option value="Paid">Paid</option>
+      </select>
+    </div>
+    <div class="toolbar">
+      <div>
+        <label><input type="checkbox" id="selectAll"> Select all unpaid</label>
+        <span class="count" id="count"></span>
+      </div>
+      <button id="adjustBtn" disabled>Adjust selected</button>
+    </div>
+    <div class="wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="check"></th>
+            <th>Invoice no.</th>
+            <th>Main invoice</th>
+            <th>Installer</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="empty">Loading…</div>
+    </div>
+    <div class="error" id="listError"></div>
+  </section>
+</main>
+
+<script>
+  // Paste your Apps Script web app URL here
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyHy3JyzmlxySepwq4IH6n4-0MkX8a1qrNV_sjthKtJDktcfT6JTuZkkJDryy8eNuyKZw/exec';
+
+  let rows = [];        // { id, sub, main, installer, status, selected }
+  const $ = id => document.getElementById(id);
+  const tbody = $('rows');
+
+  async function api(body) {
+    if (body) {
+      const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        if (!data.ok) throw new Error(data.error || 'Request failed');
+        return data.rows;
+      } catch (e) {
+        if (e.message && !e.message.startsWith('Unexpected')) throw e;
+        // Google returned HTML instead of JSON — write went through, reload via GET
+      }
+    }
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Request failed');
+    return data.rows;
+  }
+
+  function setRows(list) {
+    const selected = new Set(rows.filter(r => r.selected).map(r => r.id));
+    rows = list.map(r => ({ ...r, selected: selected.has(r.id) && r.status === 'Unpaid' }));
+    refreshInstallers();
+    render();
+  }
+
+  function busy(on) { $('app').classList.toggle('busy', on); }
+
+  function parseSubs(text) {
+    return text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function matches(r) {
+    const inst = $('installerFilter').value;
+    if (inst && r.installer !== inst) return false;
+    const st = $('statusFilter').value;
+    if (st && r.status !== st) return false;
+    const q = $('search').value.trim().toLowerCase();
+    if (!q) return true;
+    return [r.sub, r.main, r.installer].some(v => String(v).toLowerCase().includes(q));
+  }
+
+  function refreshInstallers() {
+    const sel = $('installerFilter');
+    const current = sel.value;
+    const names = [...new Set(rows.map(r => r.installer))].sort((a, b) => a.localeCompare(b));
+    sel.innerHTML = '<option value="">All installers</option>' +
+      names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    sel.value = names.includes(current) ? current : '';
+  }
+
+  function render() {
+    tbody.innerHTML = '';
+    const visible = rows.filter(matches);
+    const empty = $('empty');
+    empty.style.display = visible.length ? 'none' : 'block';
+    empty.textContent = rows.length ? 'No invoices match your search.' : 'No invoices yet. Add one on the left.';
+    visible.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="check">${r.status === 'Unpaid'
+          ? `<input type="checkbox" data-id="${r.id}" ${r.selected ? 'checked' : ''}>`
+          : ''}</td>
+        <td>${esc(r.sub)}</td>
+        <td>${esc(r.main)}</td>
+        <td>${esc(r.installer)}</td>
+        <td class="status ${r.status.toLowerCase()}">${r.status}</td>
+        <td><button class="small secondary" data-remove="${r.id}">Remove</button></td>`;
+      tbody.appendChild(tr);
+    });
+    const unpaid = rows.filter(r => r.status === 'Unpaid').length;
+    const selected = rows.filter(r => r.selected).length;
+    $('count').textContent = rows.length
+      ? `${rows.length} sub invoices · ${unpaid} unpaid · ${selected} selected`
+      : '';
+    $('adjustBtn').disabled = selected === 0;
+    $('selectAll').checked = unpaid > 0 && selected === unpaid;
+  }
+
+  async function load() {
+    $('listError').textContent = '';
+    try { setRows(await api()); }
+    catch (e) { $('empty').textContent = 'Could not load invoices.'; $('listError').textContent = e.message; }
+  }
+
+  $('addBtn').onclick = async () => {
+    const main = $('mainInvoice').value.trim();
+    const installer = $('installer').value.trim();
+    const subs = parseSubs($('subInvoices').value);
+    const err = $('formError');
+    err.textContent = '';
+    if (!main) return err.textContent = 'Main invoice number is required.';
+    if (!installer) return err.textContent = 'Installer name is required.';
+    if (!subs.length) return err.textContent = 'Enter at least one sub invoice number.';
+
+    const existing = new Set(rows.map(r => r.sub));
+    const dupes = subs.filter(s => existing.has(s));
+    if (dupes.length) return err.textContent = `Already added: ${dupes.join(', ')}`;
+
+    busy(true);
+    try {
+      setRows(await api({ action: 'add', rows: subs.map(sub => ({ sub, main, installer })) }));
+      $('mainInvoice').value = '';
+      $('installer').value = '';
+      $('subInvoices').value = '';
+    } catch (e) { err.textContent = e.message; }
+    busy(false);
+  };
+
+  $('clearFormBtn').onclick = () => {
+    $('mainInvoice').value = '';
+    $('installer').value = '';
+    $('subInvoices').value = '';
+    $('formError').textContent = '';
+  };
+
+  tbody.addEventListener('change', e => {
+    const id = e.target.dataset.id;
+    if (!id) return;
+    const r = rows.find(r => r.id === id);
+    if (r) r.selected = e.target.checked;
+    render();
+  });
+
+  tbody.addEventListener('click', async e => {
+    const id = e.target.dataset.remove;
+    if (!id) return;
+    busy(true);
+    try { setRows(await api({ action: 'remove', id })); }
+    catch (err) { $('listError').textContent = err.message; }
+    busy(false);
+  });
+
+  $('search').oninput = render;
+  $('installerFilter').onchange = render;
+  $('statusFilter').onchange = render;
+
+  $('selectAll').onchange = e => {
+    rows.forEach(r => { if (r.status === 'Unpaid') r.selected = e.target.checked; });
+    render();
+  };
+
+  $('adjustBtn').onclick = async () => {
+    const selected = rows.filter(r => r.selected);
+    if (!selected.length) return;
+
+    const data = selected.map(r => ({
+      'Invoice No.': r.sub,
+      'Main Invoice': r.main,
+      'Installer': r.installer,
+      'Status': 'Paid'
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 24 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Adjust');
+
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+    XLSX.writeFile(wb, `adjust_${stamp}.xlsx`);
+
+    busy(true);
+    try { setRows(await api({ action: 'adjust', ids: selected.map(r => r.id) })); }
+    catch (err) { $('listError').textContent = err.message; }
+    busy(false);
+  };
+
+  load();
+</script>
+</body>
+</html>
