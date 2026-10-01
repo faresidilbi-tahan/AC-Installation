@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Abed Tahan — Invoice Tracker</title>
+<title>Abed Tahan — AC Installation Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
@@ -15,7 +15,9 @@
     --muted: #6b7280;
     --line: #d7dde5;
     --unpaid: #b45309;
+    --unpaid-bg: #fff4e5;
     --paid: #15803d;
+    --paid-bg: #e8f5ec;
     --danger: #b42318;
   }
   * { box-sizing: border-box; }
@@ -36,14 +38,14 @@
   header h1 { margin: 0; font-size: 20px; font-weight: 600; }
   header p { margin: 4px 0 0; font-size: 13px; opacity: .92; }
   main {
-    max-width: 1100px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 24px 24px 60px;
     display: grid;
-    grid-template-columns: 340px 1fr;
+    grid-template-columns: 320px 1fr;
     gap: 20px;
   }
-  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
   .panel {
     background: var(--panel);
     border: 1px solid var(--line);
@@ -86,7 +88,7 @@
   .actions { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
   .search { margin-bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
   .search input { flex: 1 1 220px; padding: 9px 12px; }
-  .search select { width: auto; min-width: 140px; padding: 9px 10px; }
+  .search select { width: auto; min-width: 150px; padding: 9px 10px; }
   .toolbar {
     display: flex;
     justify-content: space-between;
@@ -99,12 +101,26 @@
   .toolbar label { margin: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; }
   .toolbar input[type="checkbox"] { width: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
   th { color: var(--muted); font-weight: 500; font-size: 13px; }
-  td.check { width: 36px; }
-  .status { font-weight: 600; }
-  .status.unpaid { color: var(--unpaid); }
-  .status.paid { color: var(--paid); }
+  th.pay { text-align: center; }
+  td.pay { text-align: center; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+  .chip input { width: auto; margin: 0; cursor: pointer; }
+  .chip.unpaid { background: var(--unpaid-bg); color: var(--unpaid); }
+  .chip.paid { background: var(--paid-bg); color: var(--paid); cursor: default; }
+  .chip.unpaid.on { outline: 2px solid var(--blue); }
+  td.remove { text-align: right; }
   .empty { color: var(--muted); padding: 30px 0; text-align: center; font-size: 14px; }
   .error { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 18px; }
   .wrap { overflow-x: auto; }
@@ -115,26 +131,20 @@
 <header>
   <img src="https://abedtahan.com/cdn/shop/files/AT_Logo_400x200_Transparent.png?v=1732612010&width=250" alt="Abed Tahan">
   <h1>AC Installation Tracker</h1>
-  <p>Add installer invoices, then adjust them to paid.</p>
+  <p>Add installer invoices, then adjust payments to paid.</p>
 </header>
 
 <main id="app">
   <section class="panel">
     <h2>Add invoice</h2>
-    <label for="mainInvoice">Main invoice number</label>
-    <input id="mainInvoice" placeholder="e.g. 45120">
+    <label for="supplierInvoice">Supplier invoice</label>
+    <input id="supplierInvoice" placeholder="e.g. 28">
 
     <label for="installer">Installer name</label>
     <input id="installer" placeholder="e.g. Ahmad Khalil">
 
-    <label for="payType">Pay type</label>
-    <select id="payType">
-      <option value="Installation">Installation pay</option>
-      <option value="Other">Other pay</option>
-    </select>
-
-    <label for="subInvoices">Sub invoice numbers</label>
-    <textarea id="subInvoices" placeholder="45120-1&#10;45120-2&#10;45120-3"></textarea>
+    <label for="tahanInvoices">Tahan invoices</label>
+    <textarea id="tahanInvoices" placeholder="76002631&#10;76002952&#10;77001464"></textarea>
     <div class="hint">One per line, or separated by commas.</div>
 
     <div class="error" id="formError"></div>
@@ -148,15 +158,12 @@
     <div class="search">
       <input id="search" placeholder="Search by invoice number or installer" autocomplete="off">
       <select id="installerFilter"><option value="">All installers</option></select>
-      <select id="payTypeFilter">
-        <option value="">All pay types</option>
-        <option value="Installation">Installation</option>
-        <option value="Other">Other</option>
-      </select>
       <select id="statusFilter">
-        <option value="">All statuses</option>
-        <option value="Unpaid">Unpaid</option>
-        <option value="Paid">Paid</option>
+        <option value="">All</option>
+        <option value="install-unpaid">Installation unpaid</option>
+        <option value="other-unpaid">Other unpaid</option>
+        <option value="any-unpaid">Any unpaid</option>
+        <option value="all-paid">Fully paid</option>
       </select>
     </div>
     <div class="toolbar">
@@ -170,12 +177,11 @@
       <table>
         <thead>
           <tr>
-            <th class="check"></th>
-            <th>Invoice no.</th>
-            <th>Main invoice</th>
+            <th>Tahan invoice</th>
+            <th>Supplier invoice</th>
             <th>Installer</th>
-            <th>Pay type</th>
-            <th>Status</th>
+            <th class="pay">Installation payment</th>
+            <th class="pay">Other payments</th>
             <th></th>
           </tr>
         </thead>
@@ -188,10 +194,11 @@
 </main>
 
 <script>
-  // Paste your Apps Script web app URL here
   const API_URL = 'https://script.google.com/macros/s/AKfycbzFEED5FAK6Hd0O6tH1Faap-MFTIsoggfmcIDcNoD4Tzd0yJOi278cVMMXo4uJebu8oEg/exec';
 
-  let rows = [];        // { id, sub, main, installer, pay_type, status, selected }
+  const TYPES = { install: 'Installation', other: 'Other' };
+  let rows = [];                 // { id, tahan, supplier, installer, install, other }
+  let selected = new Set();      // "id:install" / "id:other"
   const $ = id => document.getElementById(id);
   const tbody = $('rows');
 
@@ -215,15 +222,20 @@
   }
 
   function setRows(list) {
-    const selected = new Set(rows.filter(r => r.selected).map(r => r.id));
-    rows = list.map(r => ({ ...r, selected: selected.has(r.id) && r.status === 'Unpaid' }));
+    rows = list;
+    const valid = new Set();
+    rows.forEach(r => {
+      if (r.install === 'Unpaid') valid.add(r.id + ':install');
+      if (r.other === 'Unpaid') valid.add(r.id + ':other');
+    });
+    selected = new Set([...selected].filter(k => valid.has(k)));
     refreshInstallers();
     render();
   }
 
   function busy(on) { $('app').classList.toggle('busy', on); }
 
-  function parseSubs(text) {
+  function parseList(text) {
     return text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
   }
 
@@ -234,13 +246,14 @@
   function matches(r) {
     const inst = $('installerFilter').value;
     if (inst && r.installer !== inst) return false;
-    const pt = $('payTypeFilter').value;
-    if (pt && r.pay_type !== pt) return false;
     const st = $('statusFilter').value;
-    if (st && r.status !== st) return false;
+    if (st === 'install-unpaid' && r.install !== 'Unpaid') return false;
+    if (st === 'other-unpaid' && r.other !== 'Unpaid') return false;
+    if (st === 'any-unpaid' && r.install !== 'Unpaid' && r.other !== 'Unpaid') return false;
+    if (st === 'all-paid' && (r.install !== 'Paid' || r.other !== 'Paid')) return false;
     const q = $('search').value.trim().toLowerCase();
     if (!q) return true;
-    return [r.sub, r.main, r.installer].some(v => String(v).toLowerCase().includes(q));
+    return [r.tahan, r.supplier, r.installer].some(v => String(v).toLowerCase().includes(q));
   }
 
   function refreshInstallers() {
@@ -252,6 +265,16 @@
     sel.value = names.includes(current) ? current : '';
   }
 
+  function chip(r, type) {
+    const status = r[type];
+    if (status === 'Paid') return `<span class="chip paid">Paid</span>`;
+    const key = r.id + ':' + type;
+    const on = selected.has(key);
+    return `<label class="chip unpaid ${on ? 'on' : ''}">
+      <input type="checkbox" data-key="${key}" ${on ? 'checked' : ''}> Unpaid
+    </label>`;
+  }
+
   function render() {
     tbody.innerHTML = '';
     const visible = rows.filter(matches);
@@ -261,24 +284,20 @@
     visible.forEach(r => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="check">${r.status === 'Unpaid'
-          ? `<input type="checkbox" data-id="${r.id}" ${r.selected ? 'checked' : ''}>`
-          : ''}</td>
-        <td>${esc(r.sub)}</td>
-        <td>${esc(r.main)}</td>
+        <td>${esc(r.tahan)}</td>
+        <td>${esc(r.supplier)}</td>
         <td>${esc(r.installer)}</td>
-        <td>${esc(r.pay_type || '')}</td>
-        <td class="status ${r.status.toLowerCase()}">${r.status}</td>
-        <td><button class="small secondary" data-remove="${r.id}">Remove</button></td>`;
+        <td class="pay">${chip(r, 'install')}</td>
+        <td class="pay">${chip(r, 'other')}</td>
+        <td class="remove"><button class="small secondary" data-remove="${r.id}">Remove</button></td>`;
       tbody.appendChild(tr);
     });
-    const unpaid = rows.filter(r => r.status === 'Unpaid').length;
-    const selected = rows.filter(r => r.selected).length;
+    const unpaid = rows.reduce((n, r) => n + (r.install === 'Unpaid') + (r.other === 'Unpaid'), 0);
     $('count').textContent = rows.length
-      ? `${rows.length} sub invoices · ${unpaid} unpaid · ${selected} selected`
+      ? `${rows.length} invoices · ${unpaid} unpaid payments · ${selected.size} selected`
       : '';
-    $('adjustBtn').disabled = selected === 0;
-    $('selectAll').checked = unpaid > 0 && selected === unpaid;
+    $('adjustBtn').disabled = selected.size === 0;
+    $('selectAll').checked = unpaid > 0 && selected.size === unpaid;
   }
 
   async function load() {
@@ -288,43 +307,40 @@
   }
 
   $('addBtn').onclick = async () => {
-    const main = $('mainInvoice').value.trim();
+    const supplier = $('supplierInvoice').value.trim();
     const installer = $('installer').value.trim();
-    const pay_type = $('payType').value;
-    const subs = parseSubs($('subInvoices').value);
+    const tahans = parseList($('tahanInvoices').value);
     const err = $('formError');
     err.textContent = '';
-    if (!main) return err.textContent = 'Main invoice number is required.';
+    if (!supplier) return err.textContent = 'Supplier invoice is required.';
     if (!installer) return err.textContent = 'Installer name is required.';
-    if (!subs.length) return err.textContent = 'Enter at least one sub invoice number.';
+    if (!tahans.length) return err.textContent = 'Enter at least one Tahan invoice.';
 
-    const existing = new Set(rows.map(r => r.sub));
-    const dupes = subs.filter(s => existing.has(s));
+    const existing = new Set(rows.map(r => r.tahan));
+    const dupes = tahans.filter(s => existing.has(s));
     if (dupes.length) return err.textContent = `Already added: ${dupes.join(', ')}`;
 
     busy(true);
     try {
-      setRows(await api({ action: 'add', rows: subs.map(sub => ({ sub, main, installer, pay_type })) }));
-      $('mainInvoice').value = '';
+      setRows(await api({ action: 'add', rows: tahans.map(tahan => ({ tahan, supplier, installer })) }));
+      $('supplierInvoice').value = '';
       $('installer').value = '';
-      $('subInvoices').value = '';
+      $('tahanInvoices').value = '';
     } catch (e) { err.textContent = e.message; }
     busy(false);
   };
 
   $('clearFormBtn').onclick = () => {
-    $('mainInvoice').value = '';
+    $('supplierInvoice').value = '';
     $('installer').value = '';
-    $('payType').value = 'Installation';
-    $('subInvoices').value = '';
+    $('tahanInvoices').value = '';
     $('formError').textContent = '';
   };
 
   tbody.addEventListener('change', e => {
-    const id = e.target.dataset.id;
-    if (!id) return;
-    const r = rows.find(r => r.id === id);
-    if (r) r.selected = e.target.checked;
+    const key = e.target.dataset.key;
+    if (!key) return;
+    if (e.target.checked) selected.add(key); else selected.delete(key);
     render();
   });
 
@@ -339,25 +355,32 @@
 
   $('search').oninput = render;
   $('installerFilter').onchange = render;
-  $('payTypeFilter').onchange = render;
   $('statusFilter').onchange = render;
 
   $('selectAll').onchange = e => {
-    rows.forEach(r => { if (r.status === 'Unpaid') r.selected = e.target.checked; });
+    selected = new Set();
+    if (e.target.checked) rows.forEach(r => {
+      if (r.install === 'Unpaid') selected.add(r.id + ':install');
+      if (r.other === 'Unpaid') selected.add(r.id + ':other');
+    });
     render();
   };
 
   $('adjustBtn').onclick = async () => {
-    const selected = rows.filter(r => r.selected);
-    if (!selected.length) return;
+    if (!selected.size) return;
+    const items = [...selected].map(k => { const [id, type] = k.split(':'); return { id, type }; });
+    const byId = Object.fromEntries(rows.map(r => [r.id, r]));
 
-    const data = selected.map(r => ({
-      'Invoice No.': r.sub,
-      'Main Invoice': r.main,
-      'Installer': r.installer,
-      'Pay Type': r.pay_type || '',
-      'Status': 'Paid'
-    }));
+    const data = items.map(it => {
+      const r = byId[it.id];
+      return {
+        'Tahan Invoice': r.tahan,
+        'Supplier Invoice': r.supplier,
+        'Installer': r.installer,
+        'Payment': TYPES[it.type],
+        'Status': 'Paid'
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(data);
     ws['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 24 }, { wch: 14 }, { wch: 10 }];
     const wb = XLSX.utils.book_new();
@@ -368,7 +391,7 @@
     XLSX.writeFile(wb, `adjust_${stamp}.xlsx`);
 
     busy(true);
-    try { setRows(await api({ action: 'adjust', ids: selected.map(r => r.id) })); }
+    try { setRows(await api({ action: 'adjust', items })); }
     catch (err) { $('listError').textContent = err.message; }
     busy(false);
   };
