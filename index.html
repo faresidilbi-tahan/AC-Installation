@@ -124,7 +124,6 @@
   .empty { color: var(--muted); padding: 30px 0; text-align: center; font-size: 14px; }
   .error { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 18px; }
   .wrap { overflow-x: auto; }
-  .busy { opacity: .6; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -202,23 +201,31 @@
   const $ = id => document.getElementById(id);
   const tbody = $('rows');
 
-  async function api(body) {
-    if (body) {
+  const CACHE_KEY = 'ac-tracker-rows';
+
+  async function fetchRows() {
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Request failed');
+    return data.rows;
+  }
+
+  // Fire-and-forget write. The screen is already updated; on failure, show error and resync.
+  async function send(body) {
+    try {
       const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
       const text = await res.text();
       try {
         const data = JSON.parse(text);
         if (!data.ok) throw new Error(data.error || 'Request failed');
-        return data.rows;
       } catch (e) {
         if (e.message && !e.message.startsWith('Unexpected')) throw e;
-        // Google returned HTML instead of JSON — write went through, reload via GET
+        // HTML instead of JSON — write went through
       }
+    } catch (e) {
+      $('listError').textContent = 'Save failed: ' + e.message + ' — reloading.';
+      load();
     }
-    const res = await fetch(API_URL);
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Request failed');
-    return data.rows;
   }
 
   function setRows(list) {
@@ -229,11 +236,16 @@
       if (r.other === 'Unpaid') valid.add(r.id + ':other');
     });
     selected = new Set([...selected].filter(k => valid.has(k)));
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(rows)); } catch (e) {}
     refreshInstallers();
     render();
   }
 
-  function busy(on) { $('app').classList.toggle('busy', on); }
+  function uuid() {
+    return crypto.randomUUID ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+  }
 
   function parseList(text) {
     return text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
@@ -302,8 +314,11 @@
 
   async function load() {
     $('listError').textContent = '';
-    try { setRows(await api()); }
-    catch (e) { $('empty').textContent = 'Could not load invoices.'; $('listError').textContent = e.message; }
+    try { setRows(await fetchRows()); }
+    catch (e) {
+      if (!rows.length) $('empty').textContent = 'Could not load invoices.';
+      $('listError').textContent = e.message;
+    }
   }
 
   $('addBtn').onclick = async () => {
@@ -320,14 +335,12 @@
     const dupes = tahans.filter(s => existing.has(s));
     if (dupes.length) return err.textContent = `Already added: ${dupes.join(', ')}`;
 
-    busy(true);
-    try {
-      setRows(await api({ action: 'add', rows: tahans.map(tahan => ({ tahan, supplier, installer })) }));
-      $('supplierInvoice').value = '';
-      $('installer').value = '';
-      $('tahanInvoices').value = '';
-    } catch (e) { err.textContent = e.message; }
-    busy(false);
+    const newRows = tahans.map(tahan => ({ id: uuid(), tahan, supplier, installer, install: 'Unpaid', other: 'Unpaid' }));
+    setRows([...rows, ...newRows]);
+    $('supplierInvoice').value = '';
+    $('installer').value = '';
+    $('tahanInvoices').value = '';
+    send({ action: 'add', rows: newRows });
   };
 
   $('clearFormBtn').onclick = () => {
@@ -347,10 +360,8 @@
   tbody.addEventListener('click', async e => {
     const id = e.target.dataset.remove;
     if (!id) return;
-    busy(true);
-    try { setRows(await api({ action: 'remove', id })); }
-    catch (err) { $('listError').textContent = err.message; }
-    busy(false);
+    setRows(rows.filter(r => r.id !== id));
+    send({ action: 'remove', id });
   });
 
   $('search').oninput = render;
@@ -390,12 +401,16 @@
     const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
     XLSX.writeFile(wb, `adjust_${stamp}.xlsx`);
 
-    busy(true);
-    try { setRows(await api({ action: 'adjust', items })); }
-    catch (err) { $('listError').textContent = err.message; }
-    busy(false);
+    items.forEach(it => { byId[it.id][it.type] = 'Paid'; });
+    selected = new Set();
+    setRows(rows);
+    send({ action: 'adjust', items });
   };
 
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
+    if (cached.length) setRows(cached);
+  } catch (e) {}
   load();
 </script>
 </body>
